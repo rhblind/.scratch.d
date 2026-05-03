@@ -1,0 +1,264 @@
+#+title: Scratch Emacs Configuration
+#+property: header-args:emacs-lisp :tangle config.el :results silent :comments link
+#+property: header-args :tangle no :results silent :eval no-export
+#+startup: inlineimages fold
+
+Literate config. ~emacs-lisp~ blocks tangle to ~config.el~ by default;
+override per-block with ~:tangle packages.el~ to send a block to packages.
+Tangling happens automatically on Emacs start whenever this file is newer
+than its outputs.
+
+* Configuration
+
+#+begin_src emacs-lisp
+;;; config.el -*- lexical-binding: t; -*-
+#+end_src
+
+** Identity
+#+begin_src emacs-lisp
+;; (setq user-full-name "Your Name"
+;;       user-mail-address "you@example.com")
+#+end_src
+
+** Better defaults
+#+begin_src emacs-lisp
+;; (setq-default indent-tabs-mode nil)
+#+end_src
+
+** Org root
+Top-level org settings that the rest of the org / org-roam / capture
+config keys off (`org-roam-directory' under `org-directory', etc.).
+
+#+begin_src emacs-lisp
+(setq org-directory                  (expand-file-name "OneDrive/org" (getenv "HOME"))
+      org-agenda-files               (list org-directory)
+      ;; Insertion-time link IDs survive heading rename and refile
+      ;; better than name-based links.
+      org-id-link-to-org-use-id      t
+      ;; Predefined tag for org-crypt-protected subtrees (the
+      ;; `org-crypt' package itself isn't enabled here; tag is harmless
+      ;; without it and ready to use if/when you turn it on).
+      org-tag-alist                  '(("crypt" . ?c))
+      ;; Roam already broadens the agenda extra-files via the hook
+      ;; below; start from a clean slate.
+      org-agenda-text-search-extra-files '())
+#+end_src
+
+** Org crypt
+GPG-encrypt subtrees tagged ~:crypt:~ on save (the tag is already in
+~org-tag-alist~ above; press ~,q~ in an org buffer and add ~crypt~ to a
+heading). ~org-crypt~ ships with org, so no extra install.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  (require 'org-crypt)
+  (org-crypt-use-before-save-magic)
+  ;; Don't propagate the `crypt' tag to child headings (otherwise
+  ;; encrypting a parent encrypts every descendant whose own tag is
+  ;; inherited).
+  (setq org-tags-exclude-from-inheritance '("crypt")
+        ;; Encrypt to this GPG identity. `nil' would prompt every save.
+        org-crypt-key "rhblind@gmail.com"))
+#+end_src
+
+** ox-hugo
+Static-site export to [[https://gohugo.io/][Hugo]]: write posts in org, ~ox-hugo~ converts each
+subtree to Markdown into the Hugo content tree on save.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'ox-hugo)
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package ox-hugo
+  :after ox
+  :config
+  (when (eq system-type 'darwin)
+    (setq org-hugo-base-dir
+          (expand-file-name "workspace/hugo-blog" (getenv "HOME"))))
+  ;; Auto-export-on-save for blog files (mirrors the dir-local hook
+  ;; from my Doom config: `(after! org (org-hugo-auto-export-mode))').
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (when (and (boundp 'org-hugo-base-dir)
+                         (buffer-file-name)
+                         (string-prefix-p (file-truename org-hugo-base-dir)
+                                          (file-truename (buffer-file-name))))
+                (org-hugo-auto-export-mode 1)))))
+#+end_src
+
+** org-cliplink (personal tweak)
+Framework already installs and autoloads ~org-cliplink~. Personal
+preference: shell out to curl for the title fetch (more robust on
+flaky TLS / redirects than url.el).
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org-cliplink
+  (setq org-cliplink-transport-implementation 'curl))
+#+end_src
+
+** Org agenda
+Personal agenda customization, ported from my Doom config: super-agenda
+groupings and an "o" Overview command.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'org-super-agenda)
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package org-super-agenda
+  :commands org-super-agenda-mode
+  :init
+  ;; Header keymap conflicts with evil; nil it out.
+  (setq org-super-agenda-header-map nil))
+
+(with-eval-after-load 'org-agenda
+  (org-super-agenda-mode 1)
+
+  (setq org-agenda-breadcrumbs-separator  " ❱ "
+        org-agenda-compact-blocks         t
+        org-agenda-include-deadlines      t
+        org-agenda-skip-deadline-if-done  t
+        org-agenda-skip-scheduled-if-done t
+        org-agenda-tags-column            100
+        org-agenda-block-separator        9472)
+
+  (setq org-agenda-custom-commands
+        '(("o" "Overview"
+           ((agenda "" ((org-agenda-span 'day)
+                        (org-super-agenda-groups
+                         '((:name "Today"
+                            :time-grid t
+                            :date today
+                            :todo "TODAY"
+                            :scheduled today
+                            :order 1)))))
+            (alltodo "" ((org-agenda-overriding-header "")
+                         (org-super-agenda-groups
+                          '((:name "Next to do"    :todo "NEXT" :order 1)
+                            (:name "Important"     :tag "Important" :priority "A" :order 6)
+                            (:name "Due Today"     :deadline today :order 2)
+                            (:name "Due Soon"      :deadline future :order 8)
+                            (:name "Overdue"       :deadline past :face error :order 7)
+                            (:name "Work"          :tag "Work" :order 10)
+                            (:name "Issues"        :tag "Issue" :order 12)
+                            (:name "Emacs"         :tag "Emacs" :order 13)
+                            (:name "Projects"      :tag "Project" :order 14)
+                            (:name "Research"      :tag "Research" :order 15)
+                            (:name "To read"       :tag "Read" :order 30)
+                            (:name "Waiting"       :todo "WAITING" :order 20)
+                            (:name "University"    :tag "uni" :order 32)
+                            (:name "Trivial"
+                             :priority<= "E"
+                             :tag ("Trivial" "Unimportant")
+                             :todo ("SOMEDAY")
+                             :order 90)
+                            (:discard (:tag ("Chore" "Routine" "Daily")))))))))))
+  )
+#+end_src
+
+** org-roam
+Personal org-roam customization, ported from my Doom config.
+
+#+begin_src emacs-lisp
+;; Personal preference: vanilla `org-capture' has no templates here
+;; (we use roam captures instead), so route the canonical capture
+;; keys -- `SPC X' (leader top-level) and `C-c c' (stock-Emacs) --
+;; straight to `org-roam-capture'.
+(with-eval-after-load 'general
+  (map! :leader :desc "org-roam capture" "X" #'org-roam-capture))
+(global-set-key (kbd "C-c c") #'org-roam-capture)
+
+(with-eval-after-load 'org-roam
+  (setq org-roam-directory  (file-name-as-directory
+                             (expand-file-name "roam" org-directory))
+        org-roam-index-file (expand-file-name "index.org" org-roam-directory))
+
+  ;; Capture templates: main / reference / article subdirectories.
+  (setq org-roam-capture-templates
+        '(("m" "main" plain "%?"
+           :if-new (file+head "main/${slug}.org" "#+title: ${title}\n")
+           :immediate-finish t
+           :unnarrowed t)
+          ("r" "reference" plain "%?"
+           :if-new (file+head "reference/${title}.org" "#+title: ${title}\n")
+           :immediate-finish t
+           :unnarrowed t)
+          ("a" "article" plain "%?"
+           :if-new (file+head "articles/${title}.org"
+                              "#+title: ${title}\n#+filetags: :article:\n")
+           :immediate-finish t
+           :unnarrowed t)))
+
+  ;; Type column = subdirectory name (main / reference / articles / ...).
+  (cl-defmethod org-roam-node-type ((node org-roam-node))
+    "Return the TYPE of NODE."
+    (condition-case nil
+        (file-name-nondirectory
+         (directory-file-name
+          (file-name-directory
+           (file-relative-name (org-roam-node-file node) org-roam-directory))))
+      (error "")))
+
+  (setq org-roam-node-display-template
+        (concat "${type:15} ${title:*} "
+                (propertize "${tags:10}" 'face 'org-tag)))
+
+  ;; Update the database whenever a roam file is saved.
+  (add-hook 'after-save-hook
+            (lambda ()
+              (when (and (derived-mode-p 'org-mode)
+                         (org-roam-file-p))
+                (org-roam-db-update-file)))))
+
+;; Make roam files searchable from agenda commands without paying the
+;; listing cost on startup.
+(with-eval-after-load 'org-agenda
+  (add-hook 'org-agenda-mode-hook
+            (lambda ()
+              (when (and (featurep 'org-roam)
+                         (not org-agenda-text-search-extra-files))
+                (setq org-agenda-text-search-extra-files
+                      (org-roam--list-files org-roam-directory))))))
+#+end_src
+
+* Packages
+Blocks tagged ~:tangle packages.el~ end up in a separate file that loads
+/before/ ~config.el~ -- the place to declare packages that need to install
+(and possibly load) before the main configuration runs.
+
+With ~straight-use-package-by-default~ on, a plain ~(use-package foo)~ in
+~config.el~ already installs and configures in one step; reach for
+~packages.el~ for things that must install eagerly (themes, foundational
+libraries) or for plain ~(straight-use-package 'foo)~ declarations.
+
+#+begin_src emacs-lisp :tangle packages.el
+;;; packages.el -*- lexical-binding: t; no-byte-compile: t; -*-
+#+end_src
+
+** Modules
+Modules are loaded eagerly via the ~scratch!~ macro. Each module's
+~packages.el~ runs first (across all enabled modules), then each
+module's ~config.el~. Putting the call in this file ensures modules
+are fully wired up before any user code in ~config.el~ runs.
+
+#+begin_src emacs-lisp :tangle packages.el
+(scratch! :editor     (evil +everywhere) leader
+          :completion vertico corfu
+          :emacs      (vc +forge +gutter)
+          :checkers   syntax
+          :lang       (org +roam)
+          :os         macos
+          :ui         theme modeline fonts treemacs workspaces smooth-scroll hl-todo)
+#+end_src
+
+** Example: install a package eagerly
+#+begin_src emacs-lisp :tangle packages.el
+;; (straight-use-package 'magit)
+#+end_src
+
+** Example: configure (in config.el)
+#+begin_src emacs-lisp
+;; (use-package magit
+;;   :defer t)
+#+end_src
