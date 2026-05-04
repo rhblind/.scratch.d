@@ -16,13 +16,278 @@ than its outputs.
 
 ** Identity
 #+begin_src emacs-lisp
-;; (setq user-full-name "Your Name"
-;;       user-mail-address "you@example.com")
+(setq user-full-name    "Rolf Håvard Blindheim"
+      user-mail-address "rhblind@gmail.com")
+
+(defconst user-home-directory
+  (expand-file-name (file-name-as-directory "~"))
+  "Absolute path to the current user's home directory.
+Some of the config below builds paths relative to this -- handier
+than scattering ~ expansions everywhere.")
 #+end_src
 
 ** Better defaults
+Settings that the framework doesn't already cover (or that I want
+tweaked further) -- editor + file + display behaviour. Things like
+~vc-follow-symlinks~, ~which-key-idle-delay~, ~smartparens-global-mode~,
+~ws-butler-global-mode~ and the ~pixel-scroll-precision~ stack are
+already framework defaults via the corresponding modules.
+
 #+begin_src emacs-lisp
-;; (setq-default indent-tabs-mode nil)
+(setq auto-save-default              t            ; don't lose unsaved buffers on a crash
+      auto-revert-use-notify         t            ; file-system notifications, not polling
+      auto-revert-interval           1            ; fallback poll interval (seconds)
+      auto-revert-avoid-polling      t            ; prefer notifications over polling
+      revert-without-query           '(".*")      ; never prompt; always revert silently
+      delete-by-moving-to-trash      t            ; deletions go to the OS trash
+      confirm-kill-emacs             nil          ; just close, don't ask twice
+      display-time-24hr-format       t
+      evil-want-fine-undo            t            ; granular undos in evil insert state
+      evil-ex-substitute-global      t            ; default `:s' to global, no /g needed
+      fill-column                    120          ; we have screen real estate
+      history-length                 1000
+      warning-minimum-level          :error       ; suppress noisy *Warnings* on info / warning
+      mouse-wheel-tilt-scroll        t            ; horizontal trackpad scrolling
+      mouse-wheel-flip-direction     t            ; natural-scroll direction
+      scroll-margin                  10
+      sh-shell                       "sh"
+      undo-limit                     (* 16 1024 1024)  ; 16 MB undo
+      window-combination-resize      t            ; new windows take space from all neighbours
+      window-divider-default-right-width 3        ; thicker dividers
+      x-stretch-cursor               t            ; stretch block cursor to glyph width
+      diff-hl-flydiff-delay          2)           ; throttle diff-hl recompute
+#+end_src
+
+Modes to keep on globally:
+#+begin_src emacs-lisp
+(diff-hl-flydiff-mode      1)        ; async diff-hl updates
+(display-time-mode         1)        ; clock in the modeline
+(global-auto-revert-mode   1)        ; auto-reload buffers when files change
+(global-goto-address-mode  1)        ; render URLs as clickable
+(global-subword-mode       1)        ; CamelCase = multiple "words"
+(window-divider-mode       1)        ; visible vertical / horizontal dividers
+
+;; Wrap long lines at the window edge in prose-y modes.
+(dolist (hook '(text-mode-hook comint-mode-hook))
+  (add-hook hook #'visual-line-mode))
+#+end_src
+
+*** Hack: clear file-notify watches periodically
+On macOS I sometimes hit "Too many open files" because Emacs's
+file-watch descriptors don't respect ~ulimit~ or ~sysctl
+kern.maxfiles~. Workaround: drop all file-notify watches every five
+minutes. The cost is rebuilding watches on next save, which is
+imperceptible.
+
+#+begin_src emacs-lisp
+(require 'filenotify)
+
+(defun scratch/file-notify-rm-all-watches (&optional silent)
+  "Drop all `file-notify' watches. Reset for the \"too many open files\" bug."
+  (interactive)
+  (if silent
+      (maphash (lambda (k _) (file-notify-rm-watch k)) file-notify-descriptors)
+    (let ((rep (make-progress-reporter "Clearing file-notify watches... ")))
+      (maphash (lambda (k _) (file-notify-rm-watch k)) file-notify-descriptors)
+      (progress-reporter-done rep))))
+
+(run-with-timer 0 (* 5 60) #'scratch/file-notify-rm-all-watches t)
+#+end_src
+
+** GPG, SSH and encryption
+Keep auth secrets in ~~/.authinfo.gpg~ (lives in my dotfiles repo --
+copy in place on a new machine). Use ~gpg-agent~ as the SSH agent
+too, and let Emacs handle the pinentry prompt in the minibuffer
+(loopback mode) so encryption flows don't break in TTY frames.
+
+The ~pinentry~ package is required for ~pinentry-start~; install in
+the eager-packages block at the bottom of this file.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'pinentry)
+#+end_src
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'epa
+  (setq auth-source-cache-expiry                       nil
+        epa-file-select-keys                           nil
+        epa-file-cache-passphrase-for-symmetric-encryption t
+        epg-pinentry-mode                              'loopback
+        epg-gpg-program
+        (cond ((eq system-type 'darwin)     "/opt/homebrew/bin/gpg")
+              ((eq system-type 'gnu/linux)  "/usr/bin/gpg")
+              ((eq system-type 'windows-nt) "C:/Program Files (x86)/GNU/GnuPG/gpg2")
+              (t                            "gpg"))))
+
+;; Start a pinentry server so GPG passphrase prompts land in the
+;; minibuffer instead of spawning a graphical pinentry. Requires
+;; `allow-loopback-pinentry' in ~/.gnupg/gpg-agent.conf.
+(when (require 'pinentry nil t)
+  (pinentry-start))
+
+;; gpg-agent's notion of "current TTY" goes stale across SSH /
+;; tmux / Emacs daemon restarts. Refresh it at startup and before
+;; every magit commit (the most common trigger for a passphrase
+;; prompt) so signing doesn't fall over with "Inappropriate ioctl".
+(defun scratch/gpg-update-tty ()
+  "Tell gpg-agent the current TTY so pinentry can attach to it."
+  (call-process "gpg-connect-agent" nil nil nil
+                "updatestartuptty" "/bye"))
+
+(scratch/gpg-update-tty)
+
+(with-eval-after-load 'magit
+  (advice-add 'magit-commit-create :before
+              (lambda (&rest _) (scratch/gpg-update-tty))))
+#+end_src
+
+** Project discovery
+~~/workspace~ is the parent directory holding all my git repos. Listing
+it as a discovery root makes the framework auto-register every git
+repo found under it (up to ~scratch-projects-search-depth~ levels)
+on ~emacs-startup-hook~, so ~SPC p p~ surfaces them without having
+to ~SPC p A~ each one manually.
+
+#+begin_src emacs-lisp
+(setq scratch-projects-search-path '("~/workspace"))
+#+end_src
+
+** evil (personal tweaks)
+Personal evil rebindings on top of the framework's ~:editor evil~
+defaults. ~H~ / ~L~ become first-non-blank / end-of-visual-line
+(easier to reach than ~^~ / ~$~), ~0~ becomes a paren-jump (Doom's
+default ~%~ replacement).
+
+#+begin_src emacs-lisp
+(defun scratch/evil-end-of-visual-line ()
+  "Interactive `evil-end-of-visual-line' wrapper.
+Fixes a quirk where the underlying motion isn't interactive and
+leaves point one column past where you'd expect in visual state."
+  (interactive)
+  (evil-end-of-visual-line))
+
+(with-eval-after-load 'evil
+  (evil-define-key '(visual motion) 'global
+    "H" #'evil-first-non-blank
+    "L" #'scratch/evil-end-of-visual-line
+    "0" #'evil-jump-item))
+#+end_src
+
+** marginalia (personal tweaks)
+Two add-ons over the framework's ~:completion vertico~ defaults:
+
+1. Show variable values verbatim in ~M-x describe-variable~ etc.
+   instead of marginalia's auto-mask. Trade-off: easier to inspect,
+   but values matching auth-source / password / secret patterns
+   render in the clear (mind your screenshots / screen-shares).
+2. Color-code the size and modification-time columns in file pickers
+   (~SPC f f~, ~consult-buffer~, ...) so newer / smaller files glow,
+   older / larger files fade. ~doom-blend~ replaced with a builtin
+   ~color.el~-based blender so we don't pull Doom code.
+
+#+begin_src emacs-lisp
+(defun scratch-color-blend (c1 c2 alpha)
+  "Blend color strings C1 and C2 by ALPHA (0 = pure C1, 1 = pure C2).
+Returns a `#rrggbb' hex string."
+  (require 'color)
+  (cl-destructuring-bind (r1 g1 b1) (color-name-to-rgb c1)
+    (cl-destructuring-bind (r2 g2 b2) (color-name-to-rgb c2)
+      (color-rgb-to-hex (+ (* r1 (- 1 alpha)) (* r2 alpha))
+                        (+ (* g1 (- 1 alpha)) (* g2 alpha))
+                        (+ (* b1 (- 1 alpha)) (* b2 alpha))
+                        2))))
+
+(with-eval-after-load 'marginalia
+  (setq marginalia-censor-variables nil)
+
+  (defun scratch-marginalia--time-colorful (time)
+    "Foreground for TIME blended between marginalia-date (fresh) and
+marginalia-documentation (old) -- log scale on age in days."
+    (let* ((seconds (float-time (time-subtract (current-time) time)))
+           (color (scratch-color-blend
+                   (face-attribute 'marginalia-date :foreground nil t)
+                   (face-attribute 'marginalia-documentation :foreground nil t)
+                   (/ 1.0 (log (+ 3 (/ (+ 1 seconds) 345600.0)))))))
+      (propertize (marginalia--time time) 'face (list :foreground color))))
+
+  (defun scratch-marginalia--file-size-colorful (size)
+    "Foreground for SIZE: green (small) -> orange (medium) -> red (huge).
+Log10-scaled so each order of magnitude shifts the hue noticeably."
+    (let* ((size-index (/ (log10 (+ 1 size)) 7.0))
+           (color (if (< size-index 1.0)
+                      (scratch-color-blend "green" "orange" size-index)
+                    ;; > ~10MB: continue blending orange -> red.
+                    (scratch-color-blend "orange" "red"
+                                         (min 1.0 (- size-index 1.0))))))
+      (propertize (file-size-human-readable size)
+                  'face (list :foreground color))))
+
+  (advice-add 'marginalia--annotate-local-file :override
+              #'scratch-marginalia--annotate-local-file)
+
+  (defun scratch-marginalia--annotate-local-file (cand)
+    "Colorful override of `marginalia--annotate-local-file'."
+    (when-let (attrs (file-attributes (substitute-in-file-name
+                                       (marginalia--full-candidate cand))
+                                      'integer))
+      (marginalia--fields
+       ((marginalia--file-owner attrs)
+        :width 12 :face 'marginalia-file-owner)
+       ((marginalia--file-modes attrs))
+       ((scratch-marginalia--file-size-colorful (file-attribute-size attrs))
+        :width 7)
+       ((scratch-marginalia--time-colorful (file-attribute-modification-time attrs))
+        :width 12)))))
+#+end_src
+
+** vterm (personal tweaks)
+Layered on top of the framework's ~:term vterm~ defaults (which
+already handle ~TAB~ completion, ~M-/C-<backspace>~ word delete, and
+~vterm-copy-mode~ evil states). Personal preferences:
+
+- ~vterm-timer-delay nil~ -- snappier redraw, no batched output buffering.
+- Override ~vterm-send-return~ to emit CR (~\C-m~) instead of LF.
+  Some shells / TTY setups (~icrnl=t~) expect CR on enter; LF causes
+  the cursor to move down without executing the line.
+- ~C-j~ / ~C-k~ as down / up arrow (vim-style scrollback navigation
+  in shells).
+- ~C-<delete>~ / ~M-<delete>~ as delete-word-forward (sends ~M-d~).
+- ~M-<return>~ as literal newline (multi-line shell input).
+- ~C-g~ cancels the running shell command, except inside
+  ~claude-code-ide~ buffers where C-g would trigger "open in editor"
+  -- there it sends ESC instead.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'vterm
+  (setq vterm-timer-delay nil)
+  (defun vterm-send-return ()
+    "Send CR to the libvterm process (override)."
+    (interactive)
+    (deactivate-mark)
+    (when vterm--term
+      (process-send-string vterm--process "\C-m")))
+  (with-eval-after-load 'evil
+    (map! :map vterm-mode-map
+      :i "C-j"           (lambda () (interactive) (vterm-send-key "<down>"))
+      :i "C-k"           (lambda () (interactive) (vterm-send-key "<up>"))
+      :n "C-j"           (lambda () (interactive) (vterm-send-key "<down>"))
+      :n "C-k"           (lambda () (interactive) (vterm-send-key "<up>"))
+      :i "C-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
+      :n "C-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
+      :i "M-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
+      :n "M-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
+      :i "M-<return>"    (lambda () (interactive)
+                           (process-send-string vterm--process "\n"))
+      :n "M-<return>"    (lambda () (interactive)
+                           (process-send-string vterm--process "\n"))
+      :i "C-g"           (lambda () (interactive)
+                           (if (string-prefix-p "*claude-code[" (buffer-name))
+                               (vterm-send-escape)
+                             (process-send-string vterm--process "\C-g")))
+      :n "C-g"           (lambda () (interactive)
+                           (if (string-prefix-p "*claude-code[" (buffer-name))
+                               (vterm-send-escape)
+                             (process-send-string vterm--process "\C-g"))))))
 #+end_src
 
 ** Org root
@@ -169,11 +434,17 @@ Personal org-roam customization, ported from my Doom config.
   (map! :leader :desc "org-roam capture" "X" #'org-roam-capture))
 (global-set-key (kbd "C-c c") #'org-roam-capture)
 
-(with-eval-after-load 'org-roam
-  (setq org-roam-directory  (file-name-as-directory
-                             (expand-file-name "roam" org-directory))
-        org-roam-index-file (expand-file-name "index.org" org-roam-directory))
+;; Set the roam directory at top level (NOT inside `with-eval-after-load')
+;; so it's in place before the package first loads. The framework's
+;; `(use-package org-roam :config (org-roam-db-autosync-enable))' wires
+;; the file watcher / DB on first load -- if `org-roam-directory' isn't
+;; set yet, the DB syncs against the default `~/org/roam/' (which is
+;; empty / nonexistent here), and `SPC n r f' returns no nodes.
+(setq org-roam-directory  (file-name-as-directory
+                           (expand-file-name "roam" org-directory))
+      org-roam-index-file (expand-file-name "index.org" org-roam-directory))
 
+(with-eval-after-load 'org-roam
   ;; Capture templates: main / reference / article subdirectories.
   (setq org-roam-capture-templates
         '(("m" "main" plain "%?"
@@ -236,6 +507,20 @@ libraries) or for plain ~(straight-use-package 'foo)~ declarations.
 ;;; packages.el -*- lexical-binding: t; no-byte-compile: t; -*-
 #+end_src
 
+** Themes
+Install [[https://github.com/doomemacs/themes][doom-themes]] eagerly so the framework's ~:ui theme~ module
+can load them, and override ~scratch-theme-{dark,light}~ BEFORE
+~scratch!~ runs (the module reads these on init). Dark =
+~doom-nord~, light = ~doom-tomorrow-day~ -- same pair I've been
+running in Doom for years.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'doom-themes)
+
+(setq scratch-theme-dark  'doom-nord
+      scratch-theme-light 'doom-tomorrow-day)
+#+end_src
+
 ** Modules
 Modules are loaded eagerly via the ~scratch!~ macro. Each module's
 ~packages.el~ runs first (across all enabled modules), then each
@@ -243,13 +528,18 @@ module's ~config.el~. Putting the call in this file ensures modules
 are fully wired up before any user code in ~config.el~ runs.
 
 #+begin_src emacs-lisp :tangle packages.el
-(scratch! :editor     (evil +everywhere) leader
+(scratch! :editor     (evil +everywhere) leader smartparens
+                      ws-butler drag-stuff tree-sitter vlf
+                      symbol-overlay outshine snippets format
           :completion vertico corfu
-          :emacs      (vc +forge +gutter)
+          :emacs      (vc +forge +gutter) ibuffer dired
           :checkers   syntax
-          :lang       (org +roam)
+          :lang       (org +roam) markdown csharp elixir
+          :tools      (lsp +peek) direnv mise
+          :term       vterm
           :os         macos
-          :ui         theme modeline fonts treemacs workspaces smooth-scroll hl-todo)
+          :ui         theme modeline fonts treemacs workspaces smooth-scroll
+                      hl-todo info-colors rainbow default-text-scale)
 #+end_src
 
 ** Example: install a package eagerly
