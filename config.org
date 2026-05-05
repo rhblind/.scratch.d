@@ -122,7 +122,17 @@ the eager-packages block at the bottom of this file.
 ;; minibuffer instead of spawning a graphical pinentry. Requires
 ;; `allow-loopback-pinentry' in ~/.gnupg/gpg-agent.conf.
 (when (require 'pinentry nil t)
-  (pinentry-start))
+  (pinentry-start)
+  ;; Prevent async timers / process filters from aborting the PIN
+  ;; prompt. Without this, anything that touches the minibuffer
+  ;; while `read-passwd' is active kills the pinentry (because
+  ;; `enable-recursive-minibuffers' defaults to nil).
+  (defun scratch/pinentry-no-interrupt (orig-fn &rest args)
+    "Prevent async minibuffer access from aborting PIN entry."
+    (let ((enable-recursive-minibuffers t)
+          (inhibit-message t))
+      (apply orig-fn args)))
+  (advice-add 'pinentry--prompt :around #'scratch/pinentry-no-interrupt))
 
 ;; gpg-agent's notion of "current TTY" goes stale across SSH /
 ;; tmux / Emacs daemon restarts. Refresh it at startup and before
