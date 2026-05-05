@@ -521,6 +521,30 @@ OAuth flow). Model is ~claude-sonnet-4.5~ via the Copilot proxy.
         gptel-model   'claude-sonnet-4.5))
 #+end_src
 
+** MCP Server
+[[https://github.com/rhblind/emacs-mcp-server][emacs-mcp-server]] exposes Emacs to MCP clients (Claude Code, etc.)
+over a Unix socket. Not on MELPA, so install straight from GitHub on
+the ~main~ branch. The recipe pulls in the tool sources and wrapper
+scripts alongside the elisp.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package
+ '(mcp-server :type git :host github
+              :repo "rhblind/emacs-mcp-server"
+              :branch "main"
+              :files ("*.el" "tools/*.el")))
+#+end_src
+
+Start the Unix-socket server once Emacs has finished initialising.
+~emacs-startup-hook~ fires after ~init.el~ but before the first
+interactive command, so the socket is ready by the time anything
+external tries to connect.
+
+#+begin_src emacs-lisp
+(use-package mcp-server
+  :hook (emacs-startup . mcp-server-start-unix))
+#+end_src
+
 ** gptel-magit (auto commit messages)
 [[https://github.com/ragnard/gptel-magit][gptel-magit]] auto-fills the magit commit buffer with an LLM-generated
 message via gptel.
@@ -592,30 +616,6 @@ late-arriving callback.
 
 (with-eval-after-load 'gptel-magit
   (advice-add 'gptel-magit--generate :around #'scratch/gptel-magit-generate-wrapper))
-#+end_src
-
-** Emacs MCP server
-[[https://github.com/rhblind/emacs-mcp-server][emacs-mcp-server]] exposes Emacs to MCP clients (Claude Code, etc.)
-over a Unix socket. Not on MELPA, so install straight from GitHub on
-the ~main~ branch. The recipe pulls in the tool sources and wrapper
-scripts alongside the elisp.
-
-#+begin_src emacs-lisp :tangle packages.el
-(straight-use-package
- '(mcp-server :type git :host github
-              :repo "rhblind/emacs-mcp-server"
-              :branch "main"
-              :files ("*.el" "tools/*.el")))
-#+end_src
-
-Start the Unix-socket server once Emacs has finished initialising.
-~emacs-startup-hook~ fires after ~init.el~ but before the first
-interactive command, so the socket is ready by the time anything
-external tries to connect.
-
-#+begin_src emacs-lisp
-(use-package mcp-server
-  :hook (emacs-startup . mcp-server-start-unix))
 #+end_src
 
 * Packages
