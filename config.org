@@ -49,7 +49,6 @@ already framework defaults via the corresponding modules.
       warning-minimum-level          :error       ; suppress noisy *Warnings* on info / warning
       mouse-wheel-tilt-scroll        t            ; horizontal trackpad scrolling
       mouse-wheel-flip-direction     t            ; natural-scroll direction
-      scroll-margin                  10
       sh-shell                       "sh"
       undo-limit                     (* 16 1024 1024)  ; 16 MB undo
       window-combination-resize      t            ; new windows take space from all neighbours
@@ -147,6 +146,8 @@ it as a discovery root makes the framework auto-register every git
 repo found under it (up to ~scratch-projects-search-depth~ levels)
 on ~emacs-startup-hook~, so ~SPC p p~ surfaces them without having
 to ~SPC p A~ each one manually.
+
+
 
 #+begin_src emacs-lisp
 (setq scratch-projects-search-path '("~/workspace"))
@@ -493,6 +494,120 @@ Personal org-roam customization, ported from my Doom config.
                       (org-roam--list-files org-roam-directory))))))
 #+end_src
 
+** gptel
+[[https://github.com/karthink/gptel][gptel]] is the LLM client used here for in-buffer chat and the
+~gptel-magit~ commit-message integration below. Backend is GitHub
+Copilot's chat endpoint (no API key needed, uses its own device
+OAuth flow). Model is ~claude-sonnet-4.5~ via the Copilot proxy.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'gptel)
+#+end_src
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'gptel
+  (require 'gptel-gh)
+  (setq gptel-backend (gptel-make-gh-copilot "Copilot")
+        gptel-model   'claude-sonnet-4.5))
+#+end_src
+
+** gptel-magit (auto commit messages)
+[[https://github.com/ragnard/gptel-magit][gptel-magit]] auto-fills the magit commit buffer with an LLM-generated
+message via gptel.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package 'gptel-magit)
+#+end_src
+
+Trigger generation as soon as the commit buffer is set up, and tighten
+the prompt so the model emits raw Conventional Commits text (no
+markdown fences), with the summary capped at 80 characters.
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'magit
+  (require 'gptel-magit nil t)
+  (add-hook 'git-commit-setup-hook #'gptel-magit-generate-message))
+
+(with-eval-after-load 'gptel-magit
+  (setq gptel-magit-commit-prompt
+        (string-join
+         (list gptel-magit-prompt-conventional-commits
+               ""
+               "IMPORTANT:"
+               "- Commit message MUST follow Conventional Commits specification, with release-please compatible conventions for releases."
+               "- Return ONLY the raw commit message text"
+               "- The summary should never exceed 80 characters, unless absolutely necessary for clarity"
+               "- If including a body, ALWAYS separate it from the summary with a blank line"
+               "- Do NOT wrap the output in markdown code blocks, backticks, or any other formatting"
+               "- NEVER add triple backticks (```) before or after the commit message!")
+         "\n")))
+#+end_src
+
+*** Cancel generation when cycling commit history
+~M-p~ / ~M-n~ in the magit commit buffer cycle through previous commit
+messages. If a gptel request is still in-flight when ~M-p~ is pressed,
+the model's reply lands /after/ the recalled message and silently
+overwrites it. The advice below aborts the request and swallows any
+late-arriving callback.
+
+#+begin_src emacs-lisp
+(defvar scratch--gptel-commit-cancelled nil
+  "Non-nil when gptel commit generation has been cancelled.")
+
+(defvar scratch--gptel-magit-saved-callback nil
+  "Stored callback for `gptel-magit' cancellation handling.")
+
+(defun scratch/gptel-abort-before-commit-nav (&rest _)
+  "Abort any pending gptel request before navigating commit history."
+  (setq scratch--gptel-commit-cancelled t)
+  (when (fboundp 'gptel-abort)
+    (ignore-errors (gptel-abort))))
+
+(defun scratch/gptel-magit-callback-wrapper (msg)
+  "Forward MSG to the saved callback, unless generation was cancelled."
+  (if scratch--gptel-commit-cancelled
+      (message "gptel commit message cancelled")
+    (when scratch--gptel-magit-saved-callback
+      (funcall scratch--gptel-magit-saved-callback msg))))
+
+(defun scratch/gptel-magit-generate-wrapper (orig-fn cb)
+  "Wrap ORIG-FN (`gptel-magit--generate', original CB) with cancel tracking."
+  (setq scratch--gptel-commit-cancelled nil
+        scratch--gptel-magit-saved-callback cb)
+  (funcall orig-fn #'scratch/gptel-magit-callback-wrapper))
+
+(with-eval-after-load 'git-commit
+  (advice-add 'git-commit-prev-message :before #'scratch/gptel-abort-before-commit-nav)
+  (advice-add 'git-commit-next-message :before #'scratch/gptel-abort-before-commit-nav))
+
+(with-eval-after-load 'gptel-magit
+  (advice-add 'gptel-magit--generate :around #'scratch/gptel-magit-generate-wrapper))
+#+end_src
+
+** Emacs MCP server
+[[https://github.com/rhblind/emacs-mcp-server][emacs-mcp-server]] exposes Emacs to MCP clients (Claude Code, etc.)
+over a Unix socket. Not on MELPA, so install straight from GitHub on
+the ~main~ branch. The recipe pulls in the tool sources and wrapper
+scripts alongside the elisp.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package
+ '(mcp-server :type git :host github
+              :repo "rhblind/emacs-mcp-server"
+              :branch "main"
+              :files ("*.el" "tools/*.el")))
+#+end_src
+
+Start the Unix-socket server once Emacs has finished initialising.
+~emacs-startup-hook~ fires after ~init.el~ but before the first
+interactive command, so the socket is ready by the time anything
+external tries to connect.
+
+#+begin_src emacs-lisp
+(use-package mcp-server
+  :hook (emacs-startup . mcp-server-start-unix))
+#+end_src
+
 * Packages
 Blocks tagged ~:tangle packages.el~ end up in a separate file that loads
 /before/ ~config.el~ -- the place to declare packages that need to install
@@ -534,7 +649,7 @@ are fully wired up before any user code in ~config.el~ runs.
           :completion vertico corfu
           :emacs      (vc +forge +gutter) ibuffer dired
           :checkers   syntax
-          :lang       (org +roam) markdown csharp elixir
+          :lang       (org +roam) markdown csharp elixir json yaml
           :tools      (lsp +peek) direnv mise
           :term       vterm
           :os         macos
@@ -552,3 +667,17 @@ are fully wired up before any user code in ~config.el~ runs.
 ;; (use-package magit
 ;;   :defer t)
 #+end_src
+
+* Auto-tangle on save                                              :noexport:
+:PROPERTIES:
+:VISIBILITY: folded
+:END:
+The Local Variables block below makes saving this file regenerate
+~config.el~ + ~packages.el~ via ~org-babel-tangle~. Startup never tangles
+(see ~init.el~), so this is the in-editor refresh path; ~scratch sync~
+remains the canonical "I edited externally, regenerate everything"
+path.
+
+# Local Variables:
+# eval: (add-hook 'after-save-hook #'scratch-tangle-config-org nil 'local)
+# End:
