@@ -535,14 +535,15 @@ scripts alongside the elisp.
               :files ("*.el" "tools/*.el")))
 #+end_src
 
-Start the Unix-socket server once Emacs has finished initialising.
-~emacs-startup-hook~ fires after ~init.el~ but before the first
-interactive command, so the socket is ready by the time anything
-external tries to connect.
+Start the Unix-socket server after Emacs goes idle for the first
+time.  Deferring keeps the heavy org/gnus requires out of the
+critical startup path (~1.8 s saved).
 
 #+begin_src emacs-lisp
 (use-package mcp-server
-  :hook (emacs-startup . mcp-server-start-unix))
+  :defer t
+  :init
+  (run-with-idle-timer 1 nil #'mcp-server-start-unix))
 #+end_src
 
 ** gptel-magit (auto commit messages)
@@ -558,23 +559,21 @@ the prompt so the model emits raw Conventional Commits text (no
 markdown fences), with the summary capped at 80 characters.
 
 #+begin_src emacs-lisp
-(with-eval-after-load 'magit
-  (require 'gptel-magit nil t)
-  (add-hook 'git-commit-setup-hook #'gptel-magit-generate-message))
+  (with-eval-after-load 'magit
+    (require 'gptel-magit nil t)
+    (add-hook 'git-commit-setup-hook #'gptel-magit-generate-message))
 
-(with-eval-after-load 'gptel-magit
-  (setq gptel-magit-commit-prompt
-        (string-join
-         (list gptel-magit-prompt-conventional-commits
-               ""
-               "IMPORTANT:"
-               "- Commit message MUST follow Conventional Commits specification, with release-please compatible conventions for releases."
-               "- Return ONLY the raw commit message text"
-               "- The summary should never exceed 80 characters, unless absolutely necessary for clarity"
-               "- If including a body, ALWAYS separate it from the summary with a blank line"
-               "- Do NOT wrap the output in markdown code blocks, backticks, or any other formatting"
-               "- NEVER add triple backticks (```) before or after the commit message!")
-         "\n")))
+  (with-eval-after-load 'gptel-magit
+    (setq gptel-magit-commit-prompt
+          (string-join
+           (list gptel-magit-prompt-conventional-commits
+                 ""
+                 "IMPORTANT:"
+                 "- Return ONLY the raw commit message text"
+                 "- The summary should NEVER exceed 60 characters and never contain line breaks"
+                 "- Do NOT wrap the output in markdown code blocks, backticks, or any other formatting"
+                 "- NEVER add triple backticks (```) before or after the commit message!")
+           "\n")))
 #+end_src
 
 *** Cancel generation when cycling commit history
@@ -600,7 +599,7 @@ late-arriving callback.
 (defun scratch/gptel-magit-callback-wrapper (msg)
   "Forward MSG to the saved callback, unless generation was cancelled."
   (if scratch--gptel-commit-cancelled
-      (message "gptel commit message cancelled")
+      (message "gptel: commit message generation cancelled")
     (when scratch--gptel-magit-saved-callback
       (funcall scratch--gptel-magit-saved-callback msg))))
 
@@ -608,6 +607,7 @@ late-arriving callback.
   "Wrap ORIG-FN (`gptel-magit--generate', original CB) with cancel tracking."
   (setq scratch--gptel-commit-cancelled nil
         scratch--gptel-magit-saved-callback cb)
+  (message "gptel: generating commit message...")
   (funcall orig-fn #'scratch/gptel-magit-callback-wrapper))
 
 (with-eval-after-load 'git-commit
@@ -655,7 +655,7 @@ are fully wired up before any user code in ~config.el~ runs.
 #+begin_src emacs-lisp :tangle packages.el
 (scratch! :editor     (evil +everywhere) leader smartparens
                       ws-butler drag-stuff tree-sitter vlf
-                      symbol-overlay outshine snippets format
+                      symbol-overlay outline snippets format
           :completion vertico corfu
           :emacs      (vc +forge +gutter) ibuffer dired
           :checkers   syntax
@@ -663,8 +663,9 @@ are fully wired up before any user code in ~config.el~ runs.
           :tools      (lsp +peek) direnv mise
           :term       vterm
           :os         macos
-          :ui         theme modeline fonts treemacs workspaces smooth-scroll
-                      hl-todo info-colors rainbow default-text-scale)
+          :ui         dashboard theme modeline fonts treemacs workspaces
+                      smooth-scroll hl-todo info-colors rainbow
+                      default-text-scale)
 #+end_src
 
 ** Example: install a package eagerly
