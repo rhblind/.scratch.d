@@ -1,15 +1,96 @@
 #+title: Scratch Emacs Configuration
 #+property: header-args:emacs-lisp :tangle config.el :results silent :comments link
 #+property: header-args :tangle no :results silent :eval no-export
-#+startup: inlineimages fold
+#+property: header-args:elisp :exports code
+#+property: header-args:shell :results silent
+#+since: <replace with next tagged release version>
+#+hugo_auto_set_lastmod: t
+#+hugo_tags: org-mode
+#+hugo_categories: emacs scratch
+#+hugo_custom_front_matter: :toc true :aliases /posts/emacs-configuration
+#+export_file_name: scratch-config
+#+startup:  inlineimages fold
+#+begin_export html
+<a href="https://github.com/rhblind/.scratch.d" target="_blank" rel="noopener" title="Github" style="display: inline-flex; gap: 0.5em;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: sub;">
+    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+  </svg>View on GitHub
+</a>
+#+end_export
 
-Literate config. ~emacs-lisp~ blocks tangle to ~config.el~ by default;
-override per-block with ~:tangle packages.el~ to send a block to packages.
-Tangling happens automatically on Emacs start whenever this file is newer
-than its outputs.
+* Table of Contents :TOC_2:noexport:
+- [[#introduction][Introduction]]
+- [[#installing-emacs][Installing Emacs]]
+  - [[#fix-annoying-max-open-files-for-emacs][Fix annoying max open files for Emacs]]
+  - [[#emacs-mac][Emacs-mac]]
+- [[#getting-started][Getting Started]]
+- [[#configuration][Configuration]]
+  - [[#identity][Identity]]
+  - [[#better-defaults][Better defaults]]
+  - [[#gpg-ssh-and-encryption][GPG, SSH and encryption]]
+  - [[#project-discovery][Project discovery]]
+  - [[#evil-personal-tweaks][evil (personal tweaks)]]
+  - [[#marginalia-personal-tweaks][marginalia (personal tweaks)]]
+  - [[#vterm-personal-tweaks][vterm (personal tweaks)]]
+  - [[#org-root][Org root]]
+  - [[#org-crypt][Org crypt]]
+  - [[#ox-hugo][ox-hugo]]
+  - [[#org-cliplink-personal-tweak][org-cliplink (personal tweak)]]
+  - [[#org-agenda][Org agenda]]
+  - [[#capture-templates][Capture templates]]
+  - [[#org-roam][org-roam]]
+  - [[#gptel][gptel]]
+  - [[#mcp-server][MCP Server]]
+  - [[#gptel-magit-auto-commit-messages][gptel-magit (auto commit messages)]]
+- [[#packages][Packages]]
+  - [[#fonts][Fonts]]
+  - [[#themes][Themes]]
+  - [[#modules][Modules]]
+  - [[#example-install-a-package-eagerly][Example: install a package eagerly]]
+  - [[#hugo][Hugo]]
+  - [[#example-configure-in-configel][Example: configure (in config.el)]]
+
+* Introduction
+I've been running Emacs for a number of years and used a few different starter kits.
+I started with [[https://www.spacemacs.org/][Spacemacs]], then I moved over to [[https://github.com/doomemacs/doomemacs][Doom]]. I liked them both very much and they
+really helped me getting into Emacs.
+
+A while ago I decided that I wanted to write my own config from scratch, taking with me the
+habits (good and bad) I've accumulated over the years. Since I've become very accustomed
+to the great user experience provided by Doom Emacs, I decided to write my new config as a
+personal Doom inspired micro-framework called [[https://github.com/rhblind/scratch-emacs][Scratch Emacs]].
+
+This file is my personal =~/scratch.d/config.org= file. It contains additional config to what's included in Scratch,
+as well as notes, TODOs, FIXMEs and other useful information I like to keep close to my Emacs config.
+
+* Installing Emacs
+Emacs can be installed in many ways, but these days I'm usually on a Mac so I just use [[https://brew.sh][Homebrew]].
+There's a couple of Emacs packages in Homebrew, but I'm using the [[https://github.com/railwaycat/homebrew-emacsmacport][emacs-mac]] version.
+
+** Fix annoying max open files for Emacs
+When using LSP servers with Emacs, it’s easy to hit the “max open files” error. Emacs doesn’t seem to use operating system ulimit, but uses pselect which is limited to FD_SETSIZE file descriptors, usually 1024. This means that changing ulimit will not change the value of FD_SETSIZE compiled into Emacs and macOS libraries. To overcome this limitation we’ve to set the FD_SETSIZE CFLAG when compiling Emacs.
+
+#+begin_src shell :tangle no
+CFLAGS="-DFD_SETSIZE=10000 -DDARWIN_UNLIMITED_SELECT"
+#+end_src
+
+See [[https://en.liujiacai.net/2022/09/03/emacs-maxopenfiles/][this]] blog post for a more detailed description.
+
+** Emacs-mac
+Installation instructions are in the [[https://github.com/railwaycat/homebrew-emacsmacport/blob/master/README.md][README]] file in the repository, but the TLDR; is something like this.
+
+#+begin_src shell :tangle no
+$ brew tap railwaycat/emacsmacport
+$ CFLAGS="-DFD_SETSIZE=10000 -DDARWIN_UNLIMITED_SELECT" brew install emacs-mac --with-unlimited-select --with-tree-sitter --with-natural-title-bar --with-native-comp --with-xwidgets --with-librsvg --with-imagemagick --with-emacs-big-sur-icon
+#+end_src
+
+See the [[https://github.com/railwaycat/homebrew-emacsmacport/blob/master/Formula/emacs-mac.rb][emacs-mac.rb]] formula file for a list of supported compilation flags.
+
+* Getting Started
+After installing Emacs, follow the installation [[https://github.com/rhblind/scratch-emacs#install][instructions for Scratch Emacs]].
+Next clone this repository to =~/.scratch.d= and run ~scratch sync~ and ~scratch env~ to complete the setup.
 
 * Configuration
-
 #+begin_src emacs-lisp
 ;;; config.el -*- lexical-binding: t; -*-
 #+end_src
@@ -34,8 +115,7 @@ tweaked further) -- editor + file + display behaviour. Things like
 already framework defaults via the corresponding modules.
 
 #+begin_src emacs-lisp
-(setq auto-save-default              t            ; don't lose unsaved buffers on a crash
-      auto-revert-use-notify         t            ; file-system notifications, not polling
+(setq auto-revert-use-notify         t            ; file-system notifications, not polling
       auto-revert-interval           1            ; fallback poll interval (seconds)
       auto-revert-avoid-polling      t            ; prefer notifications over polling
       revert-without-query           '(".*")      ; never prompt; always revert silently
@@ -47,8 +127,6 @@ already framework defaults via the corresponding modules.
       fill-column                    120          ; we have screen real estate
       history-length                 1000
       warning-minimum-level          :error       ; suppress noisy *Warnings* on info / warning
-      mouse-wheel-tilt-scroll        t            ; horizontal trackpad scrolling
-      mouse-wheel-flip-direction     t            ; natural-scroll direction
       sh-shell                       "sh"
       undo-limit                     (* 16 1024 1024)  ; 16 MB undo
       window-combination-resize      t            ; new windows take space from all neighbours
@@ -61,7 +139,6 @@ Modes to keep on globally:
 #+begin_src emacs-lisp
 (diff-hl-flydiff-mode      1)        ; async diff-hl updates
 (display-time-mode         1)        ; clock in the modeline
-(global-auto-revert-mode   1)        ; auto-reload buffers when files change
 (global-goto-address-mode  1)        ; render URLs as clickable
 (global-subword-mode       1)        ; CamelCase = multiple "words"
 (window-divider-mode       1)        ; visible vertical / horizontal dividers
@@ -157,8 +234,6 @@ repo found under it (up to ~scratch-projects-search-depth~ levels)
 on ~emacs-startup-hook~, so ~SPC p p~ surfaces them without having
 to ~SPC p A~ each one manually.
 
-
-
 #+begin_src emacs-lisp
 (setq scratch-projects-search-path '("~/workspace"))
 #+end_src
@@ -169,18 +244,14 @@ defaults. ~H~ / ~L~ become first-non-blank / end-of-visual-line
 (easier to reach than ~^~ / ~$~), ~0~ becomes a paren-jump (Doom's
 default ~%~ replacement).
 
-#+begin_src emacs-lisp
-(defun scratch/evil-end-of-visual-line ()
-  "Interactive `evil-end-of-visual-line' wrapper.
-Fixes a quirk where the underlying motion isn't interactive and
-leaves point one column past where you'd expect in visual state."
-  (interactive)
-  (evil-end-of-visual-line))
+The ~end-of-visual-line~ wrapper lives in the framework
+(~scratch-evil/end-of-visual-line~); only the key bindings are personal.
 
+#+begin_src emacs-lisp
 (with-eval-after-load 'evil
   (evil-define-key '(visual motion) 'global
     "H" #'evil-first-non-blank
-    "L" #'scratch/evil-end-of-visual-line
+    "L" #'scratch-evil/end-of-visual-line
     "0" #'evil-jump-item))
 #+end_src
 
@@ -318,6 +389,9 @@ config keys off (`org-roam-directory' under `org-directory', etc.).
       ;; Roam already broadens the agenda extra-files via the hook
       ;; below; start from a clean slate.
       org-agenda-text-search-extra-files '())
+
+(setq org-todo-keywords
+      '((sequence "TODO" "NEXT" "|" "WAITING" "DONE" "KILL" "SOMEDAY")))
 #+end_src
 
 ** Org crypt
@@ -338,29 +412,18 @@ heading). ~org-crypt~ ships with org, so no extra install.
 #+end_src
 
 ** ox-hugo
-Static-site export to [[https://gohugo.io/][Hugo]]: write posts in org, ~ox-hugo~ converts each
-subtree to Markdown into the Hugo content tree on save.
-
-#+begin_src emacs-lisp :tangle packages.el
-(straight-use-package 'ox-hugo)
-#+end_src
+Auto-export-on-save for blog files under ~org-hugo-base-dir~.
+The package itself and ~use-package~ setup come from the framework's
+~+hugo~ flag.
 
 #+begin_src emacs-lisp
-(use-package ox-hugo
-  :after ox
-  :config
-  (when (eq system-type 'darwin)
-    (setq org-hugo-base-dir
-          (expand-file-name "workspace/hugo-blog" (getenv "HOME"))))
-  ;; Auto-export-on-save for blog files (mirrors the dir-local hook
-  ;; from my Doom config: `(after! org (org-hugo-auto-export-mode))').
-  (add-hook 'org-mode-hook
-            (lambda ()
-              (when (and (boundp 'org-hugo-base-dir)
-                         (buffer-file-name)
-                         (string-prefix-p (file-truename org-hugo-base-dir)
-                                          (file-truename (buffer-file-name))))
-                (org-hugo-auto-export-mode 1)))))
+(add-hook 'org-mode-hook
+          (lambda ()
+            (when (and (boundp 'org-hugo-base-dir)
+                       (buffer-file-name)
+                       (string-prefix-p (file-truename org-hugo-base-dir)
+                                        (file-truename (buffer-file-name))))
+              (org-hugo-auto-export-mode 1))))
 #+end_src
 
 ** org-cliplink (personal tweak)
@@ -374,31 +437,12 @@ flaky TLS / redirects than url.el).
 #+end_src
 
 ** Org agenda
-Personal agenda customization, ported from my Doom config: super-agenda
-groupings and an "o" Overview command.
-
-#+begin_src emacs-lisp :tangle packages.el
-(straight-use-package 'org-super-agenda)
-#+end_src
+Personal "o" Overview command with project-specific super-agenda groups.
+Base agenda settings (olivetti, org-super-agenda, prefix format, skip
+rules, visual polish) come from the framework's ~+pretty~ flag.
 
 #+begin_src emacs-lisp
-(use-package org-super-agenda
-  :commands org-super-agenda-mode
-  :init
-  ;; Header keymap conflicts with evil; nil it out.
-  (setq org-super-agenda-header-map nil))
-
 (with-eval-after-load 'org-agenda
-  (org-super-agenda-mode 1)
-
-  (setq org-agenda-breadcrumbs-separator  " ❱ "
-        org-agenda-compact-blocks         t
-        org-agenda-include-deadlines      t
-        org-agenda-skip-deadline-if-done  t
-        org-agenda-skip-scheduled-if-done t
-        org-agenda-tags-column            100
-        org-agenda-block-separator        9472)
-
   (setq org-agenda-custom-commands
         '(("o" "Overview"
            ((agenda "" ((org-agenda-span 'day)
@@ -406,45 +450,129 @@ groupings and an "o" Overview command.
                          '((:name "Today"
                             :time-grid t
                             :date today
-                            :todo "TODAY"
                             :scheduled today
-                            :order 1)))))
+                            :order 1)
+                           (:name "Overdue"
+                            :deadline past
+                            :face error
+                            :order 2)
+                           (:name "Due Soon"
+                            :deadline future
+                            :order 3)))))
             (alltodo "" ((org-agenda-overriding-header "")
+                         (org-agenda-todo-ignore-deadlines 'past)
+                         (org-agenda-todo-ignore-scheduled 'past)
                          (org-super-agenda-groups
-                          '((:name "Next to do"    :todo "NEXT" :order 1)
-                            (:name "Important"     :tag "Important" :priority "A" :order 6)
-                            (:name "Due Today"     :deadline today :order 2)
-                            (:name "Due Soon"      :deadline future :order 8)
-                            (:name "Overdue"       :deadline past :face error :order 7)
-                            (:name "Work"          :tag "Work" :order 10)
-                            (:name "Issues"        :tag "Issue" :order 12)
-                            (:name "Emacs"         :tag "Emacs" :order 13)
-                            (:name "Projects"      :tag "Project" :order 14)
-                            (:name "Research"      :tag "Research" :order 15)
-                            (:name "To read"       :tag "Read" :order 30)
-                            (:name "Waiting"       :todo "WAITING" :order 20)
-                            (:name "University"    :tag "uni" :order 32)
-                            (:name "Trivial"
-                             :priority<= "E"
-                             :tag ("Trivial" "Unimportant")
-                             :todo ("SOMEDAY")
-                             :order 90)
-                            (:discard (:tag ("Chore" "Routine" "Daily")))))))))))
-  )
+                          '((:name "Next"        :todo "NEXT"     :order 1)
+                            (:name "Important"   :priority "A"    :order 4)
+                            (:name "Work"        :tag "work"      :order 10)
+                            (:name "Personal"    :tag "personal"  :order 11)
+                            (:name "Interesting" :tag ("read" "idea") :order 20)
+                            (:name "Waiting"     :todo "WAITING"  :order 30)
+                            (:name "Someday"     :todo "SOMEDAY"  :order 90)
+                            (:discard (:tag ("Routine" "Daily")))
+                            (:name "Inbox"       :anything t      :order 99))))))))))
+#+end_src
+
+** Capture templates
+Pretty capture templates using ~doct~ (provided by ~+pretty~) with
+nerd-icon decorations. The ~:icon~ property on each group is
+automatically converted to a glyph by the framework.
+
+#+begin_src emacs-lisp
+(defvar scratch-org-capture-todo-file
+  (expand-file-name "todo.org" org-directory))
+
+(with-eval-after-load 'org-capture
+  (setq org-capture-templates
+        (doct `(("Todo" :keys "t"
+                 :icon ("nf-oct-checklist" :set "octicon" :color "green")
+                 :file scratch-org-capture-todo-file
+                 :prepend t
+                 :headline "Inbox"
+                 :type entry
+                 :template ("* TODO %? %^G%{extra}"
+                            "%i")
+                 :custom (:extra "")
+                 :children (("Todo" :keys "t"
+                             :icon ("nf-oct-checklist" :set "octicon" :color "green")
+                             :extra "")
+                            ("With deadline" :keys "d"
+                             :icon ("nf-oct-clock" :set "octicon" :color "orange")
+                             :extra "\nDEADLINE: %^{Deadline:}t")
+                            ("Scheduled" :keys "s"
+                             :icon ("nf-oct-calendar" :set "octicon" :color "orange")
+                             :extra "\nSCHEDULED: %^{Start time:}t")))
+                ("Note" :keys "n"
+                 :icon ("nf-fa-sticky_note_o" :set "faicon" :color "green")
+                 :file scratch-org-capture-todo-file
+                 :prepend t
+                 :headline "Inbox"
+                 :type entry
+                 :template ("* %? %^G"
+                            "%i"))
+                ("Interesting" :keys "i"
+                 :icon ("nf-fa-eye" :set "faicon" :color "lcyan")
+                 :file scratch-org-capture-todo-file
+                 :prepend t
+                 :headline "Interesting"
+                 :type entry
+                 :template ("* [ ] %{desc}%? :%{i-type}:"
+                            "%i")
+                 :children (("Webpage" :keys "w"
+                             :icon ("nf-fa-globe" :set "faicon" :color "green")
+                             :desc "%(org-cliplink-capture) "
+                             :i-type "read")
+                            ("Idea" :keys "i"
+                             :icon ("nf-fa-lightbulb" :set "faicon" :color "purple")
+                             :desc ""
+                             :i-type "idea")))
+                ("Project" :keys "p"
+                 :icon ("nf-oct-repo" :set "octicon" :color "purple")
+                 :prepend t
+                 :type entry
+                 :template ("* %{time-or-todo} %?"
+                            "%i"
+                            "%a")
+                 :file ""
+                 :custom (:time-or-todo "")
+                 :children (("Project todo" :keys "t"
+                             :icon ("nf-oct-checklist" :set "octicon" :color "green")
+                             :time-or-todo "TODO"
+                             :headline "TODO"
+                             :file scratch-org-project-todo-file)
+                            ("Project note" :keys "n"
+                             :icon ("nf-fa-sticky_note_o" :set "faicon" :color "yellow")
+                             :time-or-todo "%U"
+                             :headline "Notes"
+                             :file scratch-org-project-notes-file)
+                            ("Project changelog" :keys "c"
+                             :icon ("nf-oct-list_unordered" :set "octicon" :color "blue")
+                             :time-or-todo "%t"
+                             :headline "Unreleased"
+                             :file scratch-org-project-changelog-file)))
+                ,@(when scratch-org-capture-blog-file
+                    `(("Blog" :keys "b"
+                       :icon ("nf-fa-pied_piper" :set "faicon" :color "pink")
+                       :file scratch-org-capture-blog-file
+                       :prepend t
+                       :type entry
+                       :template ("* %{title} %^G"
+                                  ":PROPERTIES:"
+                                  ":EXPORT_FILE_NAME: %\\1"
+                                  ":EXPORT_DESCRIPTION: %^{Description}"
+                                  ":EXPORT_DATE: %^{Date}t"
+                                  ":EXPORT_LASTMOD: %t"
+                                  ":EXPORT_AUTHOR: %n"
+                                  ":END:"
+                                  "\n%?")
+                       :custom (:title "%^{Title}"))))))))
 #+end_src
 
 ** org-roam
 Personal org-roam customization, ported from my Doom config.
 
 #+begin_src emacs-lisp
-;; Personal preference: vanilla `org-capture' has no templates here
-;; (we use roam captures instead), so route the canonical capture
-;; keys -- `SPC X' (leader top-level) and `C-c c' (stock-Emacs) --
-;; straight to `org-roam-capture'.
-(with-eval-after-load 'general
-  (map! :leader :desc "org-roam capture" "X" #'org-roam-capture))
-(global-set-key (kbd "C-c c") #'org-roam-capture)
-
 ;; Set the roam directory at top level (NOT inside `with-eval-after-load')
 ;; so it's in place before the package first loads. The framework's
 ;; `(use-package org-roam :config (org-roam-db-autosync-enable))' wires
@@ -543,12 +671,15 @@ critical startup path (~1.8 s saved).
 (use-package mcp-server
   :defer t
   :init
+  (setq mcp-server-security-allowed-dangerous-functions
+        '(find-file with-current-buffer))
   (run-with-idle-timer 1 nil #'mcp-server-start-unix))
 #+end_src
 
 ** gptel-magit (auto commit messages)
 [[https://github.com/ragnard/gptel-magit][gptel-magit]] auto-fills the magit commit buffer with an LLM-generated
 message via gptel.
+
 
 #+begin_src emacs-lisp :tangle packages.el
 (straight-use-package 'gptel-magit)
@@ -632,6 +763,20 @@ libraries) or for plain ~(straight-use-package 'foo)~ declarations.
 ;;; packages.el -*- lexical-binding: t; no-byte-compile: t; -*-
 #+end_src
 
+** Fonts
+Set font variables BEFORE ~scratch!~ runs so the ~:ui fonts~ module
+picks them up on init. Each variable accepts a ~font-spec~, a font
+object, or an XFT string. Use ~M-x scratch/reload-font~ to apply
+changes without restarting.
+
+#+begin_src emacs-lisp :tangle packages.el
+(setq scratch-font (font-spec :family "Fira Code" :size 13 :weight 'semi-light)
+      scratch-variable-pitch-font (font-spec :family "Iosevka Aile" :size 18)
+      scratch-serif-font (font-spec :family "IBM Plex Mono" :weight 'light)
+      scratch-symbol-font (font-spec :family "Apple Symbols")
+      scratch-big-font (font-spec :family "Fira Code" :size 18))
+#+end_src
+
 ** Themes
 Install [[https://github.com/doomemacs/themes][doom-themes]] eagerly so the framework's ~:ui theme~ module
 can load them, and override ~scratch-theme-{dark,light}~ BEFORE
@@ -657,20 +802,28 @@ are fully wired up before any user code in ~config.el~ runs.
                       ws-butler drag-stuff tree-sitter vlf
                       symbol-overlay outline snippets format
           :completion vertico corfu
-          :emacs      (vc +forge +gutter) ibuffer dired
+          :emacs      (vc +forge +gutter) ibuffer (dired +preview)
           :checkers   syntax
-          :lang       (org +roam) markdown csharp elixir json yaml
-          :tools      (lsp +peek) direnv mise
+          :lang       (org +roam +hugo +pretty) markdown csharp elixir erlang json yaml
+          :tools      (lsp +peek) direnv mise just
           :term       vterm
           :os         macos
-          :ui         dashboard theme modeline fonts treemacs workspaces
-                      smooth-scroll hl-todo info-colors rainbow
-                      default-text-scale)
+          :ui         dashboard theme modeline (fonts +ligatures) treemacs workspaces
+                      smooth-scroll hl-todo info-colors rainbow)
 #+end_src
 
 ** Example: install a package eagerly
 #+begin_src emacs-lisp :tangle packages.el
 ;; (straight-use-package 'magit)
+#+end_src
+
+** Hugo
+Point ox-hugo at the Hugo site root and set the blog capture file.
+
+#+begin_src emacs-lisp
+(setq org-hugo-base-dir "~/workspace/hugo-blog"
+      scratch-org-capture-blog-file
+      (expand-file-name "blog.org" org-hugo-base-dir))
 #+end_src
 
 ** Example: configure (in config.el)

@@ -1,0 +1,9 @@
+#+title: Emacs Configuration --- [[https://rhblind.github.io/posts/emacs-configuration/][HTML version]]
+#+author: Rolf Håvard Blindheim
+#+html: <a href="https://orgmode.org"><img src="https://img.shields.io/badge/Org-literate%20config-%2377aa99?style=flat-square&logo=org&logoColor=white"></a>
+
+This repository contains my personal Emacs configuration for [[https://github.com/rhblind/scratch-emacs][Scratch Emacs]].
+You may browse the HTML version here.
+
+This is the repository for my Emacs configuration. It is all contained in a single file, ~config.org~. You may browse
+the HTML version [[https://rhblind.github.io/posts/scratch-emacs-configuration/][here]].
