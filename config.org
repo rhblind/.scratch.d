@@ -729,10 +729,13 @@ late-arriving callback.
 
 (defun scratch/gptel-magit-callback-wrapper (msg)
   "Forward MSG to the saved callback, unless generation was cancelled."
-  (if scratch--gptel-commit-cancelled
-      (message "gptel: commit message generation cancelled")
-    (when scratch--gptel-magit-saved-callback
-      (funcall scratch--gptel-magit-saved-callback msg))))
+  (cond
+   (scratch--gptel-commit-cancelled
+    (message "gptel: commit message generation cancelled"))
+   ((null msg)
+    (message "gptel: commit message generation failed (empty response)"))
+   (scratch--gptel-magit-saved-callback
+    (funcall scratch--gptel-magit-saved-callback msg))))
 
 (defun scratch/gptel-magit-generate-wrapper (orig-fn cb)
   "Wrap ORIG-FN (`gptel-magit--generate', original CB) with cancel tracking."
