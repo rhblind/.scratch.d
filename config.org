@@ -663,9 +663,7 @@ scripts alongside the elisp.
               :files ("*.el" "tools/*.el")))
 #+end_src
 
-Start the Unix-socket server after Emacs goes idle for the first
-time.  Deferring keeps the heavy org/gnus requires out of the
-critical startup path (~1.8 s saved).
+Start the Unix-socket server after Emacs goes idle for the first time.
 
 #+begin_src emacs-lisp
 (use-package mcp-server
