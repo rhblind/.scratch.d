@@ -42,6 +42,7 @@
   - [[#gptel][gptel]]
   - [[#mcp-server][MCP Server]]
   - [[#gptel-magit-auto-commit-messages][gptel-magit (auto commit messages)]]
+  - [[#eca][ECA]]
 - [[#packages][Packages]]
   - [[#fonts][Fonts]]
   - [[#themes][Themes]]
@@ -751,25 +752,37 @@ late-arriving callback.
 #+end_src
 
 ** ECA
+:PROPERTIES:
+:ID:       8A6D25E2-5C33-4892-B42D-537B7AF0879B
+:END:
 Point [[https://github.com/editor-code-assistant/eca-emacs][ECA]] at a self-hosted GLM-5.1 instance behind an
 OpenAI-compatible endpoint. The API key is read from
 ~~/.authinfo.gpg~ at session start so it never appears in config
 files.
 
+Setup on a new machine:
+
+1. Symlink the ECA config from dotfiles:
+   : mkdir -p ~/.config/eca
+   : ln -s ~/.dotfiles/eca/config.json ~/.config/eca/config.json
+2. Add an entry to ~~/.authinfo.gpg~:
+   : machine endpoint.my.api.provider.com login apikey password YOUR_SECRET
+3. Run ~scratch sync~ to install the ~eca~ module.
+
 #+begin_src emacs-lisp
 (defun my/eca-set-api-env ()
-  "Set ECA environment variables from authinfo before the server starts."
+  "Set OPENAI_API_KEY from authinfo before the ECA server starts."
   (require 'auth-source)
   (let ((found (car (auth-source-search :host "rolf-020871d4-llm.ai.intility.app"
                                         :max 1))))
     (when found
       (let ((secret (auth-info-password found)))
         (when secret
-          (setenv "OPENAI_API_KEY" secret)))))
-  (setenv "OPENAI_API_URL" "https://rolf-020871d4-llm.ai.intility.app"))
+          (setenv "OPENAI_API_KEY" secret))))))
 
 (with-eval-after-load 'eca
-  (add-hook 'eca-before-initialize-hook #'my/eca-set-api-env))
+  (my/eca-set-api-env)
+  (setq eca-chat-custom-model "intility/GLM-5.1"))
 #+end_src
 
 * Packages
@@ -828,6 +841,7 @@ are fully wired up before any user code in ~config.el~ runs.
           :emacs      (vc +forge +gutter) ibuffer (dired +preview)
           :checkers   syntax
           :lang       (org +roam +hugo +pretty) markdown csharp elixir erlang json yaml
+                      (javascript +deno)
           :tools      (lsp +peek) direnv mise just
           :llm        (claude-ide +mcp +ide-diff) (eca +completion)
           :term       vterm

@@ -1,3 +1,5 @@
 # Tangled output of config.org -- regenerated automatically.
+.eca/
+.claude/
 config.el
 packages.el
