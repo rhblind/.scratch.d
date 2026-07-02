@@ -49,7 +49,6 @@
   - [[#modules][Modules]]
   - [[#example-install-a-package-eagerly][Example: install a package eagerly]]
   - [[#hugo][Hugo]]
-  - [[#example-configure-in-configel][Example: configure (in config.el)]]
 
 * Introduction
 I've been running Emacs for a number of years and used a few different starter kits.
@@ -635,9 +634,8 @@ Personal org-roam customization, ported from my Doom config.
 
 ** gptel
 [[https://github.com/karthink/gptel][gptel]] is the LLM client used here for in-buffer chat and the
-~gptel-magit~ commit-message integration below. Backend is GitHub
-Copilot's chat endpoint (no API key needed, uses its own device
-OAuth flow). Model is ~claude-sonnet-4.5~ via the Copilot proxy.
+~gptel-magit~ commit-message integration below. Backend is a local
+Ollama instance running ~qwen2.5-coder:7b~.
 
 #+begin_src emacs-lisp :tangle packages.el
 (straight-use-package 'gptel)
@@ -645,9 +643,11 @@ OAuth flow). Model is ~claude-sonnet-4.5~ via the Copilot proxy.
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'gptel
-  (require 'gptel-gh)
-  (setq gptel-backend (gptel-make-gh-copilot "Copilot")
-        gptel-model   'claude-sonnet-4.5))
+  (setq gptel-backend (gptel-make-ollama "Ollama"
+                        :host "localhost:11434"
+                        :models '(qwen2.5-coder:7b)
+                        :stream t)
+        gptel-model 'qwen2.5-coder:7b))
 #+end_src
 
 ** MCP Server
@@ -862,12 +862,6 @@ Point ox-hugo at the Hugo site root and set the blog capture file.
 (setq org-hugo-base-dir "~/workspace/hugo-blog"
       scratch-org-capture-blog-file
       (expand-file-name "blog.org" org-hugo-base-dir))
-#+end_src
-
-** Example: configure (in config.el)
-#+begin_src emacs-lisp
-;; (use-package magit
-;;   :defer t)
 #+end_src
 
 * Auto-tangle on save                                              :noexport:
