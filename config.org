@@ -755,7 +755,7 @@ late-arriving callback.
 :PROPERTIES:
 :ID:       8A6D25E2-5C33-4892-B42D-537B7AF0879B
 :END:
-Point [[https://github.com/editor-code-assistant/eca-emacs][ECA]] at a self-hosted GLM-5.1 instance behind an
+Point [[https://github.com/editor-code-assistant/eca-emacs][ECA]] at a self-hosted GLM instance behind an
 OpenAI-compatible endpoint. The API key is read from
 ~~/.authinfo.gpg~ at session start so it never appears in config
 files.
@@ -773,7 +773,7 @@ Setup on a new machine:
 (defun my/eca-set-api-env ()
   "Set OPENAI_API_KEY from authinfo before the ECA server starts."
   (require 'auth-source)
-  (let ((found (car (auth-source-search :host "rolf-020871d4-llm.ai.intility.app"
+  (let ((found (car (auth-source-search :host "rolf-6e774e4a-llm.ai.intility.app"
                                         :max 1))))
     (when found
       (let ((secret (auth-info-password found)))
@@ -782,7 +782,7 @@ Setup on a new machine:
 
 (with-eval-after-load 'eca
   (my/eca-set-api-env)
-  (setq eca-chat-custom-model "intility/GLM-5.1"))
+  (setq eca-chat-custom-model "intility/GLM-5.2"))
 #+end_src
 
 * Packages
