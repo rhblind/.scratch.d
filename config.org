@@ -148,6 +148,16 @@ Modes to keep on globally:
   (add-hook hook #'visual-line-mode))
 #+end_src
 
+*** Emacs server
+Start the Emacs server so ~emacsclient~ can connect to this running
+instance.
+
+#+begin_src emacs-lisp
+(require 'server)
+(unless (server-running-p)
+  (server-start))
+#+end_src
+
 *** Hack: clear file-notify watches periodically
 On macOS I sometimes hit "Too many open files" because Emacs's
 file-watch descriptors don't respect ~ulimit~ or ~sysctl
