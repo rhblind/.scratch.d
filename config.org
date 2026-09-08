@@ -884,7 +884,7 @@ are fully wired up before any user code in ~config.el~ runs.
           :completion vertico corfu
           :emacs      (vc +forge +gutter) ibuffer (dired +preview)
           :checkers   syntax
-          :lang       (org +roam +hugo +pretty) markdown csharp elixir erlang json yaml
+          :lang       (org +roam +hugo +pretty +present) markdown csharp elixir erlang json yaml
                       (javascript +deno) likec4
           :tools      (lsp +peek) direnv mise just
           :llm        (claude-ide +mcp +ide-diff) (eca +completion)
