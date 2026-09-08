@@ -772,18 +772,52 @@ files.
 
 Setup on a new machine:
 
-1. Symlink the ECA config from dotfiles:
-   : mkdir -p ~/.config/eca
-   : ln -s ~/.dotfiles/eca/config.json ~/.config/eca/config.json
-2. Add an entry to ~~/.authinfo.gpg~:
+1. Add an entry to ~~/.authinfo.gpg~:
    : machine endpoint.my.api.provider.com login apikey password YOUR_SECRET
-3. Run ~scratch sync~ to install the ~eca~ module.
+2. Run ~scratch sync~ to tangle this file, which writes
+   ~~/.config/eca/config.json~ directly and installs the ~eca~ module.
+
+Model keys under ~providers.intility.models~ must be the *Model ID*
+(e.g. ~glm-5-3-flash~), not the human-readable *Model name* (e.g. "GLM-5.3
+Flash Beta") shown on the deployment dashboard. ECA sends that key
+verbatim as the ~model~ field, so the display name gets a 404 "model
+does not exist". Same rule applies to ~eca-chat-custom-model~ below.
+
+#+begin_src json :tangle (expand-file-name "eca/config.json" (or (getenv "XDG_CONFIG_HOME") "~/.config")) :mkdirp yes
+{
+  "providers": {
+    "intility": {
+      "api": "openai-chat",
+      "key": "${env:OPENAI_API_KEY}",
+      "url": "https://rolf-local-3dcdaf62-llm.ai.intility.app/v1",
+      "models": {
+        "GLM-5.2": {},
+        "glm-5-3-flash": {}
+      }
+    }
+  },
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "figma-dev-mode": {
+      "type": "http",
+      "url": "https://mcp.figma.com/mcp"
+    }
+  },
+  "plugins": {
+    "install": ["superpowers"]
+  },
+  "$schema": "https://eca.dev/config.json"
+}
+#+end_src
 
 #+begin_src emacs-lisp
 (defun my/eca-set-api-env ()
   "Set OPENAI_API_KEY from authinfo before the ECA server starts."
   (require 'auth-source)
-  (let ((found (car (auth-source-search :host "rolf-6e774e4a-llm.ai.intility.app"
+  (let ((found (car (auth-source-search :host "rolf-local-3dcdaf62-llm.ai.intility.app"
                                         :max 1))))
     (when found
       (let ((secret (auth-info-password found)))
@@ -792,7 +826,7 @@ Setup on a new machine:
 
 (with-eval-after-load 'eca
   (my/eca-set-api-env)
-  (setq eca-chat-custom-model "intility/GLM-5.2"))
+  (setq eca-chat-custom-model "intility/glm-5-3-flash"))
 #+end_src
 
 * Packages
