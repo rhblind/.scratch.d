@@ -827,6 +827,13 @@ does not exist". Same rule applies to ~eca-chat-custom-model~ below.
 (with-eval-after-load 'eca
   (my/eca-set-api-env)
   (setq eca-chat-custom-model "intility/glm-5-3-flash"))
+
+;; ⌘-Return sends the prompt (same context-sensitive behavior as RET) so
+;; evil insert mode doesn't force you to ESC first. Evil doesn't bind
+;; s-return in insert state, so the key falls through to this mode map.
+(with-eval-after-load 'eca-chat
+  (define-key eca-chat-mode-map (kbd "s-<return>")
+              #'eca-chat--key-pressed-return))
 #+end_src
 
 * Packages
