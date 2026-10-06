@@ -29,26 +29,16 @@
   - [[#better-defaults][Better defaults]]
   - [[#gpg-ssh-and-encryption][GPG, SSH and encryption]]
   - [[#project-discovery][Project discovery]]
-  - [[#evil-personal-tweaks][evil (personal tweaks)]]
-  - [[#marginalia-personal-tweaks][marginalia (personal tweaks)]]
-  - [[#vterm-personal-tweaks][vterm (personal tweaks)]]
-  - [[#org-root][Org root]]
-  - [[#org-crypt][Org crypt]]
-  - [[#ox-hugo][ox-hugo]]
-  - [[#org-cliplink-personal-tweak][org-cliplink (personal tweak)]]
-  - [[#org-agenda][Org agenda]]
-  - [[#capture-templates][Capture templates]]
-  - [[#org-roam][org-roam]]
-  - [[#gptel][gptel]]
+  - [[#evil][Evil]]
+  - [[#marginalia][Marginalia]]
+  - [[#org-mode][Org mode]]
+  - [[#gptel][Gptel]]
   - [[#mcp-server][MCP Server]]
-  - [[#gptel-magit-auto-commit-messages][gptel-magit (auto commit messages)]]
-  - [[#eca][ECA]]
+  - [[#eca---editor-code-assist][ECA - Editor Code Assist]]
 - [[#packages][Packages]]
   - [[#fonts][Fonts]]
   - [[#themes][Themes]]
   - [[#modules][Modules]]
-  - [[#example-install-a-package-eagerly][Example: install a package eagerly]]
-  - [[#hugo][Hugo]]
 
 * Introduction
 I've been running Emacs for a number of years and used a few different starter kits.
@@ -94,7 +84,6 @@ Next clone this repository to =~/.scratch.d= and run ~scratch sync~ and ~scratch
 #+begin_src emacs-lisp
 ;;; config.el -*- lexical-binding: t; -*-
 #+end_src
-
 ** Identity
 #+begin_src emacs-lisp
 (setq user-full-name    "Rolf Håvard Blindheim"
@@ -248,7 +237,7 @@ to ~SPC p A~ each one manually.
 (setq scratch-projects-search-path '("~/workspace"))
 #+end_src
 
-** evil (personal tweaks)
+** Evil
 Personal evil rebindings on top of the framework's ~:editor evil~
 defaults. ~H~ / ~L~ become first-non-blank / end-of-visual-line
 (easier to reach than ~^~ / ~$~), ~0~ becomes a paren-jump (Doom's
@@ -265,7 +254,7 @@ The ~end-of-visual-line~ wrapper lives in the framework
     "0" #'evil-jump-item))
 #+end_src
 
-** marginalia (personal tweaks)
+** Marginalia
 Two add-ons over the framework's ~:completion vertico~ defaults:
 
 1. Show variable values verbatim in ~M-x describe-variable~ etc.
@@ -332,57 +321,7 @@ Log10-scaled so each order of magnitude shifts the hue noticeably."
         :width 12)))))
 #+end_src
 
-** vterm (personal tweaks)
-Layered on top of the framework's ~:term vterm~ defaults (which
-already handle ~TAB~ completion, ~M-/C-<backspace>~ word delete, and
-~vterm-copy-mode~ evil states). Personal preferences:
-
-- ~vterm-timer-delay nil~ -- snappier redraw, no batched output buffering.
-- Override ~vterm-send-return~ to emit CR (~\C-m~) instead of LF.
-  Some shells / TTY setups (~icrnl=t~) expect CR on enter; LF causes
-  the cursor to move down without executing the line.
-- ~C-j~ / ~C-k~ as down / up arrow (vim-style scrollback navigation
-  in shells).
-- ~C-<delete>~ / ~M-<delete>~ as delete-word-forward (sends ~M-d~).
-- ~M-<return>~ as literal newline (multi-line shell input).
-- ~C-g~ cancels the running shell command, except inside
-  ~claude-code-ide~ buffers where C-g would trigger "open in editor"
-  -- there it sends ESC instead.
-
-#+begin_src emacs-lisp
-(with-eval-after-load 'vterm
-  (setq vterm-timer-delay nil)
-  (defun vterm-send-return ()
-    "Send CR to the libvterm process (override)."
-    (interactive)
-    (deactivate-mark)
-    (when vterm--term
-      (process-send-string vterm--process "\C-m")))
-  (with-eval-after-load 'evil
-    (map! :map vterm-mode-map
-      :i "C-j"           (lambda () (interactive) (vterm-send-key "<down>"))
-      :i "C-k"           (lambda () (interactive) (vterm-send-key "<up>"))
-      :n "C-j"           (lambda () (interactive) (vterm-send-key "<down>"))
-      :n "C-k"           (lambda () (interactive) (vterm-send-key "<up>"))
-      :i "C-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
-      :n "C-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
-      :i "M-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
-      :n "M-<delete>"    (lambda () (interactive) (vterm-send-key "d" nil t))
-      :i "M-<return>"    (lambda () (interactive)
-                           (process-send-string vterm--process "\n"))
-      :n "M-<return>"    (lambda () (interactive)
-                           (process-send-string vterm--process "\n"))
-      :i "C-g"           (lambda () (interactive)
-                           (if (string-prefix-p "*claude-code[" (buffer-name))
-                               (vterm-send-escape)
-                             (process-send-string vterm--process "\C-g")))
-      :n "C-g"           (lambda () (interactive)
-                           (if (string-prefix-p "*claude-code[" (buffer-name))
-                               (vterm-send-escape)
-                             (process-send-string vterm--process "\C-g"))))))
-#+end_src
-
-** Org root
+** Org mode
 Top-level org settings that the rest of the org / org-roam / capture
 config keys off (`org-roam-directory' under `org-directory', etc.).
 
@@ -404,7 +343,7 @@ config keys off (`org-roam-directory' under `org-directory', etc.).
       '((sequence "TODO" "NEXT" "|" "WAITING" "DONE" "KILL" "SOMEDAY")))
 #+end_src
 
-** Org crypt
+*** Org crypt - Support for encrypting Org subtrees
 GPG-encrypt subtrees tagged ~:crypt:~ on save (the tag is already in
 ~org-tag-alist~ above; press ~,q~ in an org buffer and add ~crypt~ to a
 heading). ~org-crypt~ ships with org, so no extra install.
@@ -421,7 +360,7 @@ heading). ~org-crypt~ ships with org, so no extra install.
         org-crypt-key "rhblind@gmail.com"))
 #+end_src
 
-** ox-hugo
+*** Ox-hugo - Export Org files as Hugo blog posts
 Auto-export-on-save for blog files under ~org-hugo-base-dir~.
 The package itself and ~use-package~ setup come from the framework's
 ~+hugo~ flag.
@@ -436,7 +375,15 @@ The package itself and ~use-package~ setup come from the framework's
               (org-hugo-auto-export-mode 1))))
 #+end_src
 
-** org-cliplink (personal tweak)
+Point ox-hugo at the Hugo site root and set the blog capture file.
+
+#+begin_src emacs-lisp
+(setq org-hugo-base-dir "~/workspace/hugo-blog"
+      scratch-org-capture-blog-file
+      (expand-file-name "blog.org" org-hugo-base-dir))
+#+end_src
+
+*** Org-cliplink
 Framework already installs and autoloads ~org-cliplink~. Personal
 preference: shell out to curl for the title fetch (more robust on
 flaky TLS / redirects than url.el).
@@ -446,7 +393,7 @@ flaky TLS / redirects than url.el).
   (setq org-cliplink-transport-implementation 'curl))
 #+end_src
 
-** Org agenda
+*** Org agenda
 Personal "o" Overview command with project-specific super-agenda groups.
 Base agenda settings (olivetti, org-super-agenda, prefix format, skip
 rules, visual polish) come from the framework's ~+pretty~ flag.
@@ -484,7 +431,54 @@ rules, visual polish) come from the framework's ~+pretty~ flag.
                             (:name "Inbox"       :anything t      :order 99))))))))))
 #+end_src
 
-** Capture templates
+*** Mermaid - Diagrams as code
+[[https://github.com/arnm/ob-mermaid][ob-mermaid]] adds an ~org-babel~ language for [[https://mermaid.js.org][Mermaid]]
+diagrams-as-code. Executing a ~mermaid~ src block (a ~:file~ header is
+/required/) renders it via [[https://github.com/mermaid-js/mermaid-cli][mermaid-cli]] (~mmdc~; install with ~npm
+install -g @mermaid-js/mermaid-cli~, which needs ~chrome-headless-shell~
+in ~~/.cache/puppeteer~: ~npx @puppeteer/browsers install
+chrome-headless-shell@stable --path ~/.cache/puppeteer~). The result is
+inlined into the buffer and also works nicely in ~+present~ slides.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package
+ '(ob-mermaid :type git :host github :repo "arnm/ob-mermaid"))
+#+end_src
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'org
+  ;; Register the babel language next to the framework's dot/emacs-lisp.
+  (add-to-list 'org-babel-load-languages '(mermaid . t))
+  (org-babel-do-load-languages 'org-babel-load-languages
+                               org-babel-load-languages))
+
+(with-eval-after-load 'ob-mermaid
+  ;; Falls back to `executable-find' when nil, but pin it explicitly.
+  (setq ob-mermaid-cli-path (executable-find "mmdc")
+        ;; Mermaid's default HTML labels (foreignObject in the SVG)
+        ;; render blank inside Emacs' SVG display. The fix recommended
+        ;; in ob-mermaid's docs: a config file that switches labels to
+        ;; plain SVG text.
+        ob-mermaid-default-config-file
+        (expand-file-name "mermaid/emacs.json"
+                          (or (getenv "XDG_CONFIG_HOME") "~/.config")))
+
+  ;; mmdc does not create the :file parent directory (it fails with
+  ;; "Error: ENOENT" instead), so ensure it exists before rendering.
+  ;; This makes relative paths like `:file images/foo.svg' work on
+  ;; demand, in any directory, without manual mkdir.
+  (defun scratch-ob-mermaid/ensure-out-dir (orig-fn body params)
+    "Create the :file parent directory before `org-babel-execute:mermaid'."
+    (when-let ((out-file (cdr (assoc :file params))))
+      (let ((dir (file-name-directory (expand-file-name out-file))))
+        (when (and dir (not (file-exists-p dir)))
+          (make-directory dir t))))
+    (funcall orig-fn body params))
+  (advice-add 'org-babel-execute:mermaid :around
+              #'scratch-ob-mermaid/ensure-out-dir))
+#+end_src
+
+*** Pretty Capture templates
 Pretty capture templates using ~doct~ (provided by ~+pretty~) with
 nerd-icon decorations. The ~:icon~ property on each group is
 automatically converted to a glyph by the framework.
@@ -579,8 +573,7 @@ automatically converted to a glyph by the framework.
                        :custom (:title "%^{Title}"))))))))
 #+end_src
 
-** org-roam
-Personal org-roam customization, ported from my Doom config.
+*** Roam - Personal knowledge management
 
 #+begin_src emacs-lisp
 ;; Set the roam directory at top level (NOT inside `with-eval-after-load')
@@ -642,7 +635,7 @@ Personal org-roam customization, ported from my Doom config.
                       (org-roam--list-files org-roam-directory))))))
 #+end_src
 
-** gptel
+** Gptel
 [[https://github.com/karthink/gptel][gptel]] is the LLM client used here for in-buffer chat and the
 ~gptel-magit~ commit-message integration below. Backend is a local
 Ollama instance running ~qwen2.5-coder:7b~.
@@ -659,36 +652,8 @@ Ollama instance running ~qwen2.5-coder:7b~.
                         :stream t)
         gptel-model 'qwen2.5-coder:7b))
 #+end_src
-
-** MCP Server
-[[https://github.com/rhblind/emacs-mcp-server][emacs-mcp-server]] exposes Emacs to MCP clients (Claude Code, etc.)
-over a Unix socket. Not on MELPA, so install straight from GitHub on
-the ~main~ branch. The recipe pulls in the tool sources and wrapper
-scripts alongside the elisp.
-
-#+begin_src emacs-lisp :tangle packages.el
-(straight-use-package
- '(mcp-server :type git :host github
-              :repo "rhblind/emacs-mcp-server"
-              :branch "main"
-              :files ("*.el" "tools/*.el")))
-#+end_src
-
-Start the Unix-socket server after Emacs goes idle for the first time.
-
-#+begin_src emacs-lisp
-(use-package mcp-server
-  :defer t
-  :init
-  (setq mcp-server-security-allowed-dangerous-functions
-        '(find-file with-current-buffer))
-  (run-with-idle-timer 1 nil #'mcp-server-start-unix))
-#+end_src
-
-** gptel-magit (auto commit messages)
-[[https://github.com/ragnard/gptel-magit][gptel-magit]] auto-fills the magit commit buffer with an LLM-generated
-message via gptel.
-
+*** Gptel-magit (auto commit messages)
+Auto-fill the magit commit buffer with an LLM-generated message via gptel.
 
 #+begin_src emacs-lisp :tangle packages.el
 (straight-use-package 'gptel-magit)
@@ -716,7 +681,7 @@ markdown fences), with the summary capped at 80 characters.
            "\n")))
 #+end_src
 
-*** Cancel generation when cycling commit history
+**** Cancel generation when cycling commit history
 ~M-p~ / ~M-n~ in the magit commit buffer cycle through previous commit
 messages. If a gptel request is still in-flight when ~M-p~ is pressed,
 the model's reply lands /after/ the recalled message and silently
@@ -761,10 +726,32 @@ late-arriving callback.
   (advice-add 'gptel-magit--generate :around #'my/gptel-magit-generate-wrapper))
 #+end_src
 
-** ECA
-:PROPERTIES:
-:ID:       8A6D25E2-5C33-4892-B42D-537B7AF0879B
-:END:
+** MCP Server
+[[https://github.com/rhblind/emacs-mcp-server][emacs-mcp-server]] exposes Emacs to MCP clients (Claude Code, etc.)
+over a Unix socket. Not on MELPA, so install straight from GitHub on
+the ~main~ branch. The recipe pulls in the tool sources and wrapper
+scripts alongside the elisp.
+
+#+begin_src emacs-lisp :tangle packages.el
+(straight-use-package
+ '(mcp-server :type git :host github
+              :repo "rhblind/emacs-mcp-server"
+              :branch "main"
+              :files ("*.el" "tools/*.el")))
+#+end_src
+
+Start the Unix-socket server after Emacs goes idle for the first time.
+
+#+begin_src emacs-lisp
+(use-package mcp-server
+  :defer t
+  :init
+  (setq mcp-server-security-allowed-dangerous-functions
+        '(find-file with-current-buffer))
+  (run-with-idle-timer 1 nil #'mcp-server-start-unix))
+#+end_src
+
+** ECA - Editor Code Assist
 Point [[https://github.com/editor-code-assistant/eca-emacs][ECA]] at a self-hosted GLM instance behind an
 OpenAI-compatible endpoint. The API key is read from
 ~~/.authinfo.gpg~ at session start so it never appears in config
@@ -815,14 +802,25 @@ does not exist". Same rule applies to ~eca-chat-custom-model~ below.
 
 #+begin_src emacs-lisp
 (defun my/eca-set-api-env ()
-  "Set OPENAI_API_KEY from authinfo before the ECA server starts."
+  "Set OPENAI_API_KEY from authinfo before the ECA server starts.
+Return non-nil when the key was found."
   (require 'auth-source)
   (let ((found (car (auth-source-search :host "rolf-local-3dcdaf62-llm.ai.intility.app"
                                         :max 1))))
-    (when found
-      (let ((secret (auth-info-password found)))
-        (when secret
-          (setenv "OPENAI_API_KEY" secret))))))
+    (if-let* ((secret (and found (auth-info-password found))))
+        (progn (setenv "OPENAI_API_KEY" secret) t)
+      (message "ECA: OPENAI_API_KEY not found in authinfo (host rolf-local-3dcdaf62-llm.ai.intility.app)")
+      nil)))
+
+(defun my/eca-ensure-api-env (&rest _)
+  "Re-resolve the API key right before each ECA server spawn.
+`with-eval-after-load' runs once per session, so a transient
+authinfo failure there (cold gpg-agent, pinentry hiccup in the
+daemon) would leave the key unset for the rest of the daemon's
+life. Resolving again at spawn time recovers from that."
+  (my/eca-set-api-env))
+
+(advice-add #'eca-process-start :before #'my/eca-ensure-api-env)
 
 (with-eval-after-load 'eca
   (my/eca-set-api-env)
@@ -892,27 +890,13 @@ are fully wired up before any user code in ~config.el~ runs.
           :emacs      (vc +forge +gutter) ibuffer (dired +preview)
           :checkers   syntax
           :lang       (org +roam +hugo +pretty +present) markdown csharp elixir erlang json yaml
-                      (javascript +deno) likec4
+                      (javascript +deno) likec4 (rust +clippy)
           :tools      (lsp +peek) direnv mise just
           :llm        (claude-ide +mcp +ide-diff) (eca +completion)
           :term       ghostel
           :os         macos
           :ui         dashboard theme modeline (fonts +ligatures) treemacs workspaces
                       smooth-scroll hl-todo info-colors rainbow)
-#+end_src
-
-** Example: install a package eagerly
-#+begin_src emacs-lisp :tangle packages.el
-;; (straight-use-package 'magit)
-#+end_src
-
-** Hugo
-Point ox-hugo at the Hugo site root and set the blog capture file.
-
-#+begin_src emacs-lisp
-(setq org-hugo-base-dir "~/workspace/hugo-blog"
-      scratch-org-capture-blog-file
-      (expand-file-name "blog.org" org-hugo-base-dir))
 #+end_src
 
 * Auto-tangle on save                                              :noexport:
