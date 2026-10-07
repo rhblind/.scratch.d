@@ -890,8 +890,8 @@ are fully wired up before any user code in ~config.el~ runs.
           :emacs      (vc +forge +gutter) ibuffer (dired +preview)
           :checkers   syntax
           :lang       (org +roam +hugo +pretty +present) markdown csharp elixir erlang json yaml
-                      (javascript +deno) likec4 (rust +clippy)
-          :tools      (lsp +peek) direnv mise just
+                      (javascript +deno) likec4 (rust +clippy) (python +debug) toml
+          :tools      (lsp +peek) direnv mise just dape
           :llm        (claude-ide +mcp +ide-diff) (eca +completion)
           :term       ghostel
           :os         macos
